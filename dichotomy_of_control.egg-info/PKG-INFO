@@ -1,0 +1,11 @@
+Metadata-Version: 2.1
+Name: dichotomy_of_control
+Version: 0.0
+Summary: Dichotomy of Control: Separating What You Can Control from What You Cannot.
+License-File: AUTHORS
+Requires-Dist: gym==0.17.0
+Requires-Dist: numpy==1.23.4
+Requires-Dist: tensorflow-addons==0.18.0
+Requires-Dist: tensorflow-gpu==2.10.0
+Requires-Dist: tf-agents==0.14.0
+Requires-Dist: transformers==4.23.1

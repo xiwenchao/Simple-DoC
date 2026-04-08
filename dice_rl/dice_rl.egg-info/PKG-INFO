@@ -1,0 +1,16 @@
+Metadata-Version: 2.1
+Name: dice_rl
+Version: 0.0.0
+Summary: A library for using distribution correction estimation in reinforcement learning.
+Home-page: https://github.com/google-research/dice_rl
+Author: Google LLC
+Author-email: no-reply@google.com
+License: Apache 2.0
+License-File: LICENSE
+Requires-Dist: tensorflow>=2.2.0
+Requires-Dist: tensorflow-probability>=0.9.0
+Requires-Dist: tf-agents>=0.5.0
+Requires-Dist: gym>=0.17.0
+Requires-Dist: numpy
+Requires-Dist: pyglib
+Requires-Dist: scipy
