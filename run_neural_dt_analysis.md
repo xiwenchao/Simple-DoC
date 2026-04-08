@@ -17,6 +17,15 @@ The analysis is based on the source code path rooted at:
 - `utils.py`
 - `dice_rl/data/*`
 
+Main code references:
+
+- `dichotomy_of_control/scripts/run_neural_dt.py:62-254`
+- `utils.py:233-270`
+- `dichotomy_of_control/scripts/stochastic_decision_transformer_training.py:108-228`
+- `dichotomy_of_control/scripts/stochastic_decision_transformer_training.py:309-379`
+- `dichotomy_of_control/models/stochastic_decision_transformer.py:244-540`
+- `dichotomy_of_control/scripts/stochastic_decision_transformer_evaluation.py:20-102`
+
 ## 1. High-level runtime flow
 
 The entrypoint is `main()` in `dichotomy_of_control/scripts/run_neural_dt.py`.
@@ -47,6 +56,10 @@ The end-to-end flow is:
 7. Build the optimizer and sequence data loader.
 8. Train for `max_iters`, each with `num_steps_per_iter` minibatches.
 9. After each training iteration, evaluate the model in FrozenLake.
+
+Code reference:
+
+- `dichotomy_of_control/scripts/run_neural_dt.py:62-254`
 
 ## 2. What exactly is loaded from disk
 
@@ -90,6 +103,13 @@ That is why the later DT conversion step does not infer trajectories by scanning
 raw `EnvStep`s manually. It calls `dataset.get_all_episodes()`, which uses the
 episode metadata to reconstruct contiguous episodes.
 
+Code references:
+
+- `dice_rl/data/tf_offpolicy_dataset.py:60-83`
+- `dice_rl/data/tf_offpolicy_dataset.py:141-187`
+- `dice_rl/data/tf_offpolicy_dataset.py:229-245`
+- `dice_rl/data/tf_offpolicy_dataset.py:305-315`
+
 ## 3. How steps and transitions are defined
 
 The original per-step semantics come from `dice_rl/data/tf_agents_onpolicy_dataset.py`.
@@ -128,6 +148,11 @@ That terminal step carries:
 - the terminal reward
 
 This is convenient for replay storage, but it means the saved episode contains an extra final observation-like step.
+
+Code references:
+
+- `dice_rl/data/tf_agents_onpolicy_dataset.py:120-181`
+- `dice_rl/data/tf_agents_onpolicy_dataset.py:198-240`
 
 ## 4. How replay data becomes DT trajectories
 
@@ -198,6 +223,11 @@ The trajectory marks:
 
 `convert_to_np_dataset()` computes `episode_next_states`, but does not keep them in the final trajectory dictionary. The training code therefore works with `(state, action, reward, done)` sequences, not explicit next-state sequences.
 
+Code references:
+
+- `utils.py:233-270`
+- `dichotomy_of_control/scripts/run_neural_dt.py:137-160`
+
 ## 5. FrozenLake-specific representation at inference time
 
 For evaluation, `run_neural_dt.py` creates a `FrozenLakeWrapper`.
@@ -214,6 +244,11 @@ argmax(model_action_vector)
 ```
 
 This is why the action head can be trained with MSE against one-hot targets and still work for a discrete environment.
+
+Code references:
+
+- `dichotomy_of_control/envs/frozenlake_wrapper.py:21-38`
+- `dichotomy_of_control/scripts/stochastic_decision_transformer_evaluation.py:65-100`
 
 ## 6. How training batches are constructed
 
@@ -268,6 +303,11 @@ Padding uses:
 
 Only positions with mask value `1` are used for loss computation.
 
+Code references:
+
+- `dichotomy_of_control/scripts/stochastic_decision_transformer_training.py:23-39`
+- `dichotomy_of_control/scripts/stochastic_decision_transformer_training.py:108-228`
+
 ## 7. Model architecture
 
 The main model is `StochasticDecisionTransformer`.
@@ -309,6 +349,11 @@ Although the model argument names say `returns_to_go`, the actual training call
 passes immediate rewards into those slots. So the code path should be read as
 "reward token" conditioning during training, not textbook DT return-to-go
 conditioning.
+
+Code references:
+
+- `dichotomy_of_control/models/stochastic_decision_transformer.py:283-316`
+- `dichotomy_of_control/scripts/stochastic_decision_transformer_training.py:315-335`
 
 ### Latent variable
 
@@ -382,6 +427,11 @@ plus a future reward/state/action window for latent inference.
 The `rtg` tensor is not fed into the transformer during training. It is used
 only as the value-head target later in the loss computation.
 
+Code references:
+
+- `dichotomy_of_control/scripts/stochastic_decision_transformer_training.py:315-320`
+- `dichotomy_of_control/scripts/stochastic_decision_transformer_training.py:323-366`
+
 ### 8.2 Latent training signal
 
 The stochastic latent part is trained as follows:
@@ -407,6 +457,10 @@ p(z | past)
 This is the training-time mechanism that injects future information into the
 representation while still teaching a past-only prior for inference.
 
+Code reference:
+
+- `dichotomy_of_control/models/stochastic_decision_transformer.py:352-380`
+
 ### 8.3 Action-head training
 
 The action head is:
@@ -423,6 +477,11 @@ So this is behavior cloning conditioned on:
 
 An auxiliary action accuracy is also logged by comparing the predicted action
 argmax to the target action argmax.
+
+Code references:
+
+- `dichotomy_of_control/models/stochastic_decision_transformer.py:427-431`
+- `dichotomy_of_control/scripts/stochastic_decision_transformer_training.py:337-355`
 
 ### 8.4 Value-head training
 
@@ -441,6 +500,12 @@ main transformer tokens are immediate rewards rather than return-to-go tokens.
 For FrozenLake, this is plausible because the episode return is bounded and the
 value head output is passed through a final `tanh`.
 
+Code references:
+
+- `dichotomy_of_control/models/stochastic_decision_transformer.py:389-394`
+- `dichotomy_of_control/scripts/stochastic_decision_transformer_training.py:319-320`
+- `dichotomy_of_control/scripts/stochastic_decision_transformer_training.py:344-355`
+
 ### 8.5 Prior-matching loss
 
 The prior loss is:
@@ -450,6 +515,12 @@ KL(q(z | future) || p(z | past))
 ```
 
 This teaches the past-only prior to approximate the future-informed posterior.
+
+Code references:
+
+- `dichotomy_of_control/models/stochastic_decision_transformer.py:367-380`
+- `utils.py:344-349`
+- `dichotomy_of_control/scripts/stochastic_decision_transformer_training.py:356-360`
 
 ### 8.6 Energy loss
 
@@ -462,6 +533,11 @@ The energy loss uses:
 
 to encourage compatibility with the correct future and incompatibility with
 mismatched futures.
+
+Code references:
+
+- `dichotomy_of_control/models/stochastic_decision_transformer.py:433-447`
+- `dichotomy_of_control/scripts/stochastic_decision_transformer_training.py:362-366`
 
 ### 8.7 Total loss
 
@@ -482,6 +558,10 @@ with:
 - `prior_loss`: KL between posterior and prior
 - `energy_loss`: contrastive energy objective
 
+Code reference:
+
+- `dichotomy_of_control/scripts/stochastic_decision_transformer_training.py:349-377`
+
 ## 9. How inference is implemented
 
 Evaluation is done by `evaluate_stochastic_decision_transformer_episode(...)`.
@@ -501,6 +581,10 @@ For each episode:
 7. Append the new observation and realized reward to history.
 8. Stop when `done=True` or `max_ep_len` is reached.
 
+Code reference:
+
+- `dichotomy_of_control/scripts/stochastic_decision_transformer_evaluation.py:20-102`
+
 ### `get_action(...)`
 
 `get_action()`:
@@ -510,6 +594,11 @@ For each episode:
 3. Creates zero-filled "future" tensors.
 4. Calls the model in inference mode.
 5. Returns the last predicted action.
+
+Code references:
+
+- `dichotomy_of_control/models/stochastic_decision_transformer.py:452-540`
+- `dichotomy_of_control/scripts/stochastic_decision_transformer_evaluation.py:70-75`
 
 ### Intended latent selection behavior
 
@@ -521,6 +610,10 @@ The intended design is:
 4. Decode the action using that latent.
 
 That is the inference-side approximation of choosing among plausible futures using only information available from the past.
+
+Code reference:
+
+- `dichotomy_of_control/models/stochastic_decision_transformer.py:395-424`
 
 ## 10. Important implementation caveats in the current code
 
@@ -542,6 +635,11 @@ So:
 
 This means the model is not using the standard DT-style return-to-go conditioning during training.
 
+Code references:
+
+- `dichotomy_of_control/scripts/stochastic_decision_transformer_training.py:315-335`
+- `dichotomy_of_control/models/stochastic_decision_transformer.py:283-316`
+
 ### Caveat 2: the value head is trained on return-to-go, but the transformer context is still reward-conditioned
 
 So the code mixes two signals:
@@ -551,6 +649,11 @@ So the code mixes two signals:
 
 This is a real part of the current implementation and should be described that
 way, rather than as standard DT return-token training.
+
+Code references:
+
+- `dichotomy_of_control/scripts/stochastic_decision_transformer_training.py:319-320`
+- `dichotomy_of_control/scripts/stochastic_decision_transformer_training.py:344-355`
 
 ### Caveat 3: evaluation ignores the requested `target_return`
 
@@ -563,6 +666,11 @@ target_return = tf.zeros((0, 1), dtype=tf.float32)
 So the requested target return passed from `run_neural_dt.py` is not actually used.
 
 Instead, the code appends realized rewards as the episode progresses. So the model is effectively conditioned on reward history, not on the user-specified desired return.
+
+Code references:
+
+- `dichotomy_of_control/scripts/run_neural_dt.py:175-202`
+- `dichotomy_of_control/scripts/stochastic_decision_transformer_evaluation.py:60-88`
 
 ### Caveat 4: prior-sample selection is not implemented cleanly
 
@@ -639,9 +747,20 @@ So in that mode, inference uses one reused prior latent for several steps, but
 the first latent in the block still comes from the same imperfect selection
 procedure.
 
+Code references:
+
+- `dichotomy_of_control/models/stochastic_decision_transformer.py:367-380`
+- `dichotomy_of_control/models/stochastic_decision_transformer.py:395-424`
+- `dichotomy_of_control/models/stochastic_decision_transformer.py:427-431`
+- `dichotomy_of_control/models/stochastic_decision_transformer.py:520-538`
+
 ### Caveat 5: next states are computed but not used in training
 
 `convert_to_np_dataset()` derives next-state information from consecutive `EnvStep`s, but it discards `next_state` in the final trajectory representation. The neural DT training path therefore does not directly train on explicit `(s_t, a_t, r_t, s_{t+1})` tuples.
+
+Code reference:
+
+- `utils.py:242-269`
 
 ## 11. Practical summary
 
