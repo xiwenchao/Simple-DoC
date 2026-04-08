@@ -454,6 +454,11 @@ p(z | past)
    state representation.
 5. That combined representation is used by both the action head and value head.
 
+Here, "current state representation" means the hidden vector of the current
+state token after the main transformer, not the raw current observation. So it
+already includes information from the available past context through causal
+self-attention.
+
 This is the training-time mechanism that injects future information into the
 representation while still teaching a past-only prior for inference.
 

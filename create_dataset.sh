@@ -14,6 +14,26 @@
 
 #!/bin/bash
 
+FROZENLAKE_ALPHA="-1.0"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --alpha)
+      if [[ $# -lt 2 ]]; then
+        echo "Missing value for --alpha" >&2
+        exit 1
+      fi
+      FROZENLAKE_ALPHA="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      echo "Usage: bash create_dataset.sh [--alpha <value>]" >&2
+      exit 1
+      ;;
+  esac
+done
+
 python dice_rl/scripts/create_dataset.py \
   --load_dir=./tests/testdata \
   --save_dir=./tests/testdata \
@@ -31,6 +51,5 @@ python dice_rl/scripts/create_dataset.py \
   --num_trajectory=100 \
   --max_trajectory_length=100 \
   --tabular_obs=1 \
-  --alpha=-1.0 \
+  --alpha="${FROZENLAKE_ALPHA}" \
   --force \
-

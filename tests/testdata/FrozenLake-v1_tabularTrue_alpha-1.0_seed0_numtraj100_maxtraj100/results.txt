@@ -1,0 +1,39 @@
+
+
+================================================================================
+Iteration 2
+time/training: 181.14464616775513
+evaluation/target_1_return_mean: 0.6
+evaluation/target_1_return_std: 0.48989794855663565
+evaluation/target_1_length_mean: 34.1
+evaluation/target_1_length_std: 20.858811087883222
+time/total: 370.86588644981384
+time/evaluation: 3.146299362182617
+training/train_loss_mean: 0.13550061307102443
+training/train_loss_std: 0.01333670687165428
+action_loss: 0.11680978536605835
+value_loss: 0.04359662905335426
+energy_loss: 0.0
+prior_loss: 0.0
+loss: 0.16040641069412231
+action_acc: 0.6988847851753235
+
+
+
+================================================================================
+Iteration 5
+time/training: 181.4074375629425
+evaluation/target_1_return_mean: 0.6
+evaluation/target_1_return_std: 0.4898979485566356
+evaluation/target_1_length_mean: 50.8
+evaluation/target_1_length_std: 24.766105870725823
+time/total: 926.4182708263397
+time/evaluation: 4.7132391929626465
+training/train_loss_mean: 0.09202752754837275
+training/train_loss_std: 0.005395862574513357
+action_loss: 0.08613061159849167
+value_loss: 6.618542829528451e-05
+energy_loss: 0.0
+prior_loss: 0.0
+loss: 0.08619679510593414
+action_acc: 0.7619848847389221
