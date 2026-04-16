@@ -1,0 +1,16 @@
+{
+  "alpha": -2.5,
+  "context_len": 20,
+  "energy_weight": 0.0,
+  "env_name": "FrozenLake-v1",
+  "env_seed": 0,
+  "max_trajectory_length": 100,
+  "num_trajectory": 100,
+  "prior_weight": 0.0,
+  "seed": 1,
+  "z_inference_opt_clip": 3.0,
+  "z_inference_opt_lr": 0.05,
+  "z_inference_opt_steps": 20,
+  "z_inference_samples": 100,
+  "z_inference_strategy": "gradient_ascent"
+}

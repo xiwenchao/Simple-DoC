@@ -169,6 +169,11 @@ class StochasticDecisionTransformer(tf.keras.Model):
                model_type='transformer',
                future_len=None,
                sample_per_step=True,
+               inference_z_strategy='sample',
+               inference_z_samples=100,
+               inference_z_opt_steps=10,
+               inference_z_opt_lr=0.1,
+               inference_z_opt_clip=3.0,
                normalize_action=True,
                normalize_return=True,
                latent_size=32,
@@ -192,6 +197,14 @@ class StochasticDecisionTransformer(tf.keras.Model):
     self._future_len = future_len or context_len
     self._model_type = model_type
     self._sample_per_step = sample_per_step
+    if inference_z_strategy not in ('sample', 'gradient_ascent'):
+      raise ValueError('Unsupported inference_z_strategy: %s' %
+                       inference_z_strategy)
+    self._inference_z_strategy = inference_z_strategy
+    self._inference_z_samples = inference_z_samples
+    self._inference_z_opt_steps = inference_z_opt_steps
+    self._inference_z_opt_lr = inference_z_opt_lr
+    self._inference_z_opt_clip = inference_z_opt_clip
     config = TransformerConfig(
         vocab_size=1,  # doesn't matter -- we don't use the vocab
         n_embd=hidden_size,
@@ -226,6 +239,67 @@ class StochasticDecisionTransformer(tf.keras.Model):
     self._z = None
     self._z_counter = 0
 
+  def _predict_value_from_state_latent(self, state_tokens, latent):
+    seq_length = tf.shape(state_tokens)[1]
+    value_preds = self._predict_value(
+        tf.concat(
+            [state_tokens,
+             tf.repeat(latent[:, None, :], seq_length, axis=1)],
+            axis=-1))
+    return value_preds[..., -1]
+
+  def _predict_terminal_value_from_state_latent(self, state_tokens, latent):
+    return self._predict_value_from_state_latent(state_tokens, latent)[:, -1]
+
+  def _select_latent_by_sampling(self, state_tokens, latent_mean, latent_std,
+                                 future_samples):
+    batch_size = tf.shape(state_tokens)[0]
+    seq_length = tf.shape(state_tokens)[1]
+    repeated_mean = tf.repeat(latent_mean, future_samples, axis=0)
+    repeated_std = tf.repeat(latent_std, future_samples, axis=0)
+    candidate_z = repeated_mean + tf.random.normal(
+        tf.shape(repeated_mean)) * repeated_std
+    repeated_state_tokens = tf.repeat(state_tokens, future_samples, axis=0)
+    value_preds = self._predict_value(
+        tf.concat([
+            repeated_state_tokens,
+            tf.repeat(candidate_z[:, None, :], seq_length, axis=1)
+        ],
+                  axis=-1))
+    value_preds = tf.reshape(value_preds,
+                             [batch_size, future_samples, seq_length])[Ellipsis,
+                                                                       -1]
+    best_idx = tf.argmax(value_preds, axis=1)
+    best_value = tf.squeeze(
+        tf.gather(value_preds, best_idx, axis=1), axis=1)
+    best_z = tf.squeeze(
+        tf.gather(
+            tf.reshape(candidate_z, [batch_size, future_samples, -1]),
+            best_idx,
+            axis=1),
+        axis=1)
+    return best_z, best_value
+
+  def _optimize_latent_by_gradient_ascent(self, state_tokens, latent_mean,
+                                          latent_std):
+    current_z = tf.identity(latent_mean)
+    lower = latent_mean - self._inference_z_opt_clip * latent_std
+    upper = latent_mean + self._inference_z_opt_clip * latent_std
+    for _ in range(self._inference_z_opt_steps):
+      with tf.GradientTape() as tape:
+        tape.watch(current_z)
+        value_preds = self._predict_terminal_value_from_state_latent(
+            state_tokens, current_z)
+        objective = tf.reduce_sum(value_preds)
+      grads = tape.gradient(objective, current_z)
+      if grads is None:
+        break
+      current_z = tf.clip_by_value(
+          current_z + self._inference_z_opt_lr * grads, lower, upper)
+    final_value = self._predict_terminal_value_from_state_latent(
+        state_tokens, current_z)
+    return current_z, final_value
+
   @tf.function
   def call(self,
            states,
@@ -238,7 +312,7 @@ class StochasticDecisionTransformer(tf.keras.Model):
            future_returns_to_go,
            future_timesteps,
            future_attention_mask,
-           future_samples=100,
+           future_samples=None,
            training=False,
            z=None):
     """Forward pass for DecisionTransformer.
@@ -314,45 +388,23 @@ class StochasticDecisionTransformer(tf.keras.Model):
     latent_mean, latent_logvar = tf.split(latent, 2, axis=-1)
     latent_std = tf.exp(0.5 * latent_logvar)
 
+    if future_samples is None:
+      future_samples = self._inference_z_samples
+
     if training:
       f_pred = latent_mean + tf.random.normal(tf.shape(latent_mean)) * latent_std
-      value_preds = self._predict_value(
-          tf.concat(
-              [x[:, 1],
-               tf.repeat((f_pred)[:, None, :], seq_length, axis=1)],
-              axis=-1))
+      value_preds = self._predict_value_from_state_latent(x[:, 1], f_pred)
     else:
       if z is not None:
         f_pred = z
-        value_preds = self._predict_value(
-            tf.concat(
-                [x[:, 1],
-                 tf.repeat((f_pred)[:, None, :], seq_length, axis=1)],
-                axis=-1))[Ellipsis, -1]
+        value_preds = self._predict_value_from_state_latent(x[:, 1], f_pred)
       else:
-        repeated_mean = tf.repeat(latent_mean, future_samples, axis=0)
-        repeated_std = tf.repeat(latent_std, future_samples, axis=0)
-        candidate_z = repeated_mean + tf.random.normal(
-            tf.shape(repeated_mean)) * repeated_std
-        repeated_state_tokens = tf.repeat(x[:, 1], future_samples, axis=0)
-        value_preds = self._predict_value(
-            tf.concat([
-                repeated_state_tokens,
-                tf.repeat(candidate_z[:, None, :], seq_length, axis=1)
-            ],
-                      axis=-1))
-        value_preds = tf.reshape(value_preds,
-                                 [batch_size, future_samples, seq_length])[Ellipsis,
-                                                                           -1]
-        best_idx = tf.argmax(value_preds, axis=1)
-        value_preds = tf.squeeze(
-            tf.gather(value_preds, best_idx, axis=1), axis=1)
-        f_pred = tf.squeeze(
-            tf.gather(
-                tf.reshape(candidate_z, [batch_size, future_samples, -1]),
-                best_idx,
-                axis=1),
-            axis=1)
+        if self._inference_z_strategy == 'sample':
+          f_pred, value_preds = self._select_latent_by_sampling(
+              x[:, 1], latent_mean, latent_std, future_samples)
+        else:
+          f_pred, value_preds = self._optimize_latent_by_gradient_ascent(
+              x[:, 1], latent_mean, latent_std)
 
     # get predictions
     action_preds = self._predict_action(

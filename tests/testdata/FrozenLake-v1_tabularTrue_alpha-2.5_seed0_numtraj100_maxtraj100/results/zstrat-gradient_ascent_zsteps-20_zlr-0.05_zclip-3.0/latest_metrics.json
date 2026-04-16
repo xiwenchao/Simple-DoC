@@ -1,0 +1,18 @@
+{
+  "action_acc": 0.926203191280365,
+  "action_loss": 0.03701164200901985,
+  "energy_loss": 0.0,
+  "evaluation/target_1_length_mean": 16.0,
+  "evaluation/target_1_length_std": 18.5903200617956,
+  "evaluation/target_1_return_mean": 0.0,
+  "evaluation/target_1_return_std": 0.0,
+  "iter_num": 10,
+  "loss": 0.03701348975300789,
+  "prior_loss": 0.0,
+  "time/evaluation": 2.5262081623077393,
+  "time/total": 1882.889309167862,
+  "time/training": 184.5360085964203,
+  "training/train_loss_mean": 0.04210788848623633,
+  "training/train_loss_std": 0.004054341250629747,
+  "value_loss": 1.8491692799216253e-06
+}

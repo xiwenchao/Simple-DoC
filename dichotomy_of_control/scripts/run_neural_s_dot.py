@@ -15,6 +15,7 @@
 
 """Run Dichotomy of Control on FrozenLake."""
 
+import json
 import pickle
 import getpass
 from absl import app
@@ -54,9 +55,45 @@ flags.DEFINE_float('energy_weight', 0., 'Unused for SDOT; kept for compatibility
 
 flags.DEFINE_integer('seed', 1, 'Training random seed.')
 flags.DEFINE_integer('context_len', 20, 'Context length.')
+flags.DEFINE_enum('z_inference_strategy', 'sample',
+                  ['sample', 'gradient_ascent'],
+                  'How to choose latent z at inference time.')
+flags.DEFINE_integer('z_inference_samples', 100,
+                     'Number of sampled z candidates for sample-based inference.')
+flags.DEFINE_integer('z_inference_opt_steps', 10,
+                     'Number of gradient-ascent steps for z optimization.')
+flags.DEFINE_float('z_inference_opt_lr', 0.1,
+                   'Step size for gradient-ascent z optimization.')
+flags.DEFINE_float('z_inference_opt_clip', 3.0,
+                   'Clamp optimized z within +/- clip * sigma around mu.')
 
 flags.DEFINE_integer('max_iters', 10, 'Training iterations.')
 flags.DEFINE_integer('num_steps_per_iter', 1_000, 'Steps per iteration.')
+
+
+def _results_subdir_name():
+  if FLAGS.z_inference_strategy == 'sample':
+    return 'zstrat-sample_zsamples-{}'.format(FLAGS.z_inference_samples)
+  return ('zstrat-gradient_ascent_zsteps-{}_zlr-{}_zclip-{}').format(
+      FLAGS.z_inference_opt_steps,
+      FLAGS.z_inference_opt_lr,
+      FLAGS.z_inference_opt_clip)
+
+
+def _to_serializable(value):
+  if tf.is_tensor(value):
+    value = value.numpy()
+  if isinstance(value, np.ndarray):
+    return value.tolist()
+  if isinstance(value, (np.floating,)):
+    return float(value)
+  if isinstance(value, (np.integer,)):
+    return int(value)
+  if isinstance(value, dict):
+    return {k: _to_serializable(v) for k, v in value.items()}
+  if isinstance(value, (list, tuple)):
+    return [_to_serializable(v) for v in value]
+  return value
 
 
 def main(argv):
@@ -98,6 +135,11 @@ def main(argv):
       'max_trajectory_length': max_trajectory_length,
       'prior_weight': FLAGS.prior_weight,
       'energy_weight': FLAGS.energy_weight,
+      'z_inference_strategy': FLAGS.z_inference_strategy,
+      'z_inference_samples': FLAGS.z_inference_samples,
+      'z_inference_opt_steps': FLAGS.z_inference_opt_steps,
+      'z_inference_opt_lr': FLAGS.z_inference_opt_lr,
+      'z_inference_opt_clip': FLAGS.z_inference_opt_clip,
   }
 
   settings = {
@@ -172,6 +214,12 @@ def main(argv):
     print(f'[{lo} -- {hi}]: {v}')
   print('=' * 50, flush=True)
 
+  results_dir = os.path.join(directory, 'results', _results_subdir_name())
+  tf.io.gfile.makedirs(results_dir)
+  with tf.io.gfile.GFile(os.path.join(results_dir, 'config.json'), 'w') as f:
+    json.dump(_to_serializable(hparam_dict), f, indent=2, sort_keys=True)
+  print('Saving results to', results_dir)
+
   def eval_episodes(target_ret):
 
     def fn(model):
@@ -215,6 +263,11 @@ def main(argv):
       n_positions=settings['n_positions'],
       resid_pdrop=settings['dropout'],
       attn_pdrop=settings['dropout'],
+      inference_z_strategy=FLAGS.z_inference_strategy,
+      inference_z_samples=FLAGS.z_inference_samples,
+      inference_z_opt_steps=FLAGS.z_inference_opt_steps,
+      inference_z_opt_lr=FLAGS.z_inference_opt_lr,
+      inference_z_opt_clip=FLAGS.z_inference_opt_clip,
   )
 
   # create optimizer
@@ -247,11 +300,19 @@ def main(argv):
   )
 
   # run training
+  logs_path = os.path.join(results_dir, 'logs.jsonl')
   for iter in range(settings['max_iters']):
     outputs = trainer.train_iteration(
         num_steps=settings['num_steps_per_iter'],
         iter_num=iter + 1,
         print_logs=True)
+    serializable_outputs = _to_serializable(outputs)
+    serializable_outputs['iter_num'] = iter + 1
+    with tf.io.gfile.GFile(logs_path, 'a') as f:
+      f.write(json.dumps(serializable_outputs, sort_keys=True) + '\n')
+  with tf.io.gfile.GFile(os.path.join(results_dir, 'latest_metrics.json'),
+                         'w') as f:
+    json.dump(serializable_outputs, f, indent=2, sort_keys=True)
 
 
 if __name__ == '__main__':

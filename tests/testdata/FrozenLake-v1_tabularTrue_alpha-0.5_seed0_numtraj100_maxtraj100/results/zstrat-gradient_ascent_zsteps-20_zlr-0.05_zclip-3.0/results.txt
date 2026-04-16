@@ -1,0 +1,16 @@
+Iteration 7
+time/training: 182.87837958335876
+evaluation/target_1_return_mean: 0.8
+evaluation/target_1_return_std: 0.4
+evaluation/target_1_length_mean: 36.5
+evaluation/target_1_length_std: 14.368368035375486
+time/total: 1319.2101674079895
+time/evaluation: 5.600207805633545
+training/train_loss_mean: 0.06550174098089337
+training/train_loss_std: 0.005249556217084086
+action_loss: 0.06567059457302094
+value_loss: 0.0005655579152517021
+energy_loss: 0.0
+prior_loss: 0.0
+loss: 0.06623615324497223
+action_acc: 0.8305531144142151
